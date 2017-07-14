@@ -1,7 +1,15 @@
 var JointSignature = artifacts.require("./JointSignature.sol");
 
+var Web3 = require('web3');
+var web3 = new Web3();
+web3.setProvider(new web3.providers.HttpProvider('http://localhost:8545'));
+
 contract('JointSignature', function(accounts) {
   var instance;
+  const manager = accounts[0];
+  const shareholders = accounts.slice(1, 4);
+  const receivers = accounts.slice(4, 9);
+  const nonManagers = accounts.slice(1);
   
   it("should have deployed an instance", function() {
     return JointSignature.deployed()
@@ -14,16 +22,41 @@ contract('JointSignature', function(accounts) {
     });
   });
 
-  it("should have the right manager", function() {
-  });
+  it("should have the right manager and only allow the manager to thange this role", function() {
+    var proms = nonManagers.map(acc => {
+      return instance.setManager(accounts[0], {from: acc})
+      .then(returnValue => {
+        assert(false, "setManager was supposed to reject a non-manager but didn't.");
+      }).catch(error => {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    });
 
-  it("the manager can not be changed by anyone else", function() {
-  });
-
-  it("should change the manager to a new one", function() {
+    return Promise.all(proms)
+    .then(() => instance.setManager(accounts[1], {from: manager}))
+    .catch(error => {
+      assert(false, error.toString());
+    })
+    .then(() => instance.setManager(accounts[1], {from: manager}))
+    .then(returnValue => {
+      assert(false, "setManager was supposed to reject the original manager but didn't.");
+    }).catch(error => {
+      assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+    })
+    .then(() => instance.setManager(accounts[0], {from: accounts[1]}));
   });
 
   it("should let the manager register a payment", function() {
+    return instance.createPayment(web3.toWei(1, 'ether'), receivers[0], {from: manager})
+    // .then(result => {
+    //   return web3.eth.getBalance(instance.address)
+    // })
+    // .then(balance => {
+    //   console.log(balance.toNumber())
+    // })
+    .catch(function(err) {
+      assert(false, "failed loading the instance: " + err.message);
+    })
   });
 
   it("should increase the amount for an already existing payment, and reset the existing approvals", function() {

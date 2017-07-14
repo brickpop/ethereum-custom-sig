@@ -36,6 +36,9 @@ $ npm install -g truffle ethereumjs-testrpc
 
 In one terminal window, launch `testrpc`
 
+* Copy the first addresses
+* Paste them into `test/JointSignature.js` > `manager` and `shareholders [...]`
+
 In the other one, use `truffle` to compile and deploy the app to your local net.
 
 ```bash

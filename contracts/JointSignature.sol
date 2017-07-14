@@ -1,34 +1,34 @@
 pragma solidity ^0.4.11;
 
 contract owned {
-  address owner;
-  function owned() {
+	address owner;
+	function owned() {
 		owner = msg.sender;
 	}
 
-  modifier ownerOnly {
+	modifier ownerOnly {
 		if (msg.sender == owner) _ ;
 		else throw;
 	}
 }
 
-contract mortal is owned {
-  function kill() ownerOnly {
-    suicide(owner);
-  }
+contract killable is owned {
+	function kill() ownerOnly {
+		suicide(owner);
+	}
 }
 
-contract JointSignature is owned, mortal {
-	uint256 constant amountSoftLimit = 0.5 ether; // allow the manager to spend 0.5 eth directly once a day
-	uint256 constant amountHardLimit = 5 ether;   // allow the manager to make payments below 5 eth if no majority rejects it within a day
-	uint directPaymentsTimeThreshold = 1 days; // time frame for payments below amountSoftLimit
-	uint paymentTimeThreshold = 1 weeks; // time frame for payments without enough consensus
-	uint lastDirectPayment = 0; // timestamp
-
+contract JointSignature is owned, killable {
 	address manager;
 	address[3] shareHolders;
 
-  modifier onlyManager {
+	uint256 constant amountSoftLimit = 0.5 ether; // allow the manager to spend 0.5 eth directly once a day
+	uint256 constant amountHardLimit = 5 ether;	 // allow the manager to make payments below 5 eth if no majority rejects it within a day
+	uint directPaymentsTimeThreshold = 1 days; // minimum time frame between payments below amountSoftLimit
+	uint paymentsUnlockThreshold = 1 weeks; // time after which payments without enough votes can be unlocked
+	uint lastDirectPayment = 0; // timestamp
+
+	modifier onlyManager {
 		if(msg.sender == manager) _ ;
 		else throw;
 	}
@@ -46,16 +46,19 @@ contract JointSignature is owned, mortal {
 
 	struct Payment {
 		uint debt;
-		uint maxDate; // timestamp after which, the payment can be made if >50% is not against
+		uint unlockDate; // payments (below amountHardLimit) are unlocked after this timestamp provided that > 50% is not against
 		PaymentChoice[3] approvals;
 	}
 
 	// @receiver => payment
-	mapping (address => Payment) private debts;
+	mapping (address => Payment) private payments;
 
 	// constructor
 	function JointSignature(bool _debug, address _manager, address _shareHolder1, address _shareHolder2, address _shareHolder3) {
-		if(_debug) directPaymentsTimeThreshold = 3 seconds;
+		if(_debug) {
+			directPaymentsTimeThreshold = 15 seconds;
+			paymentsUnlockThreshold = 15 seconds;
+		}
 		manager = _manager;
 		shareHolders = [_shareHolder1, _shareHolder2, _shareHolder3];
 	}
@@ -67,26 +70,26 @@ contract JointSignature is owned, mortal {
 
 	// manager registers a payment
 	function createPayment(uint256 _amount, address _receiver) onlyManager {
-		if(_amount == 0) return; // noop
+		if(_amount == 0) return; // save gas
 
 		bool enoughTimeSinceLastDirectPayment = (lastDirectPayment + directPaymentsTimeThreshold) < now;
-		bool belowAmountSoftLimit = (_amount + debts[_receiver].debt) <= amountSoftLimit;
+		bool belowSoftLimit = (_amount + payments[_receiver].debt) <= amountSoftLimit;
 
-		if(enoughTimeSinceLastDirectPayment && belowAmountSoftLimit){
-			_receiver.transfer(_amount + debts[_receiver].debt);
-			debts[_receiver].debt = 0;
-			debts[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+		if(enoughTimeSinceLastDirectPayment && belowSoftLimit){
+			_receiver.transfer(_amount + payments[_receiver].debt);
+			payments[_receiver].debt = 0;
+			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 			lastDirectPayment = now;
 		}
-		else if(debts[_receiver].debt > 0) { // increase + discard previous approvals
-			debts[_receiver].debt += _amount;
-			debts[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+		else if(payments[_receiver].debt > 0) { // increase + discard previous approvals
+			payments[_receiver].debt += _amount;
+			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 		}
 		else {
-			uint maxDate = now + paymentTimeThreshold;
-			debts[_receiver] = Payment({
+			uint unlockDate = now + paymentsUnlockThreshold;
+			payments[_receiver] = Payment({
 				debt: _amount,
-				maxDate: maxDate,
+				unlockDate: unlockDate,
 				approvals: [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending]
 			});
 		}
@@ -94,72 +97,76 @@ contract JointSignature is owned, mortal {
 
 	// how much is it owed to a receiver
 	function getDebt(address _receiver) onlyShareHolders constant returns (uint debt){
-		debt = debts[_receiver].debt;
+		debt = payments[_receiver].debt;
 	}
 
 	// a shareholder accepts a payment
 	function approvePayment(address _receiver) onlyShareHolders {
-		if(debts[_receiver].debt == 0) return;
+		if(payments[_receiver].debt == 0) return; // save gas
 		
 		uint8 i;
-		uint8 approved;
+		uint8 approving;
 		for(i = 0; i < shareHolders.length; i++){
 			if(msg.sender == shareHolders[i]) break;
 		}
 
-		if(debts[_receiver].approvals[i] == PaymentChoice.Approve) return; // save gas
-		debts[_receiver].approvals[i] = PaymentChoice.Approve;
+		if(payments[_receiver].approvals[i] == PaymentChoice.Approve) return; // save gas
+		payments[_receiver].approvals[i] = PaymentChoice.Approve;
 
-		for(i = 0; i < debts[_receiver].approvals.length; i++){
-			if(debts[_receiver].approvals[i] == PaymentChoice.Approve) approved++;
+		for(i = 0; i < payments[_receiver].approvals.length; i++){
+			if(payments[_receiver].approvals[i] == PaymentChoice.Approve) approving++;
 		}
 		
-		if((100 * approved / shareHolders.length) < 50) return; // nothing yet
+		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
-		_receiver.transfer(debts[_receiver].debt);
-		debts[_receiver].debt = 0;
-		debts[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+		_receiver.transfer(payments[_receiver].debt);
+		payments[_receiver].debt = 0;
+		payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 	}
 
 	// a shareholder rejects a payment
 	function rejectPayment(address _receiver) onlyShareHolders {
-		if(debts[_receiver].debt == 0) return;
+		if(payments[_receiver].debt == 0) return;
 		
 		uint8 i;
-		uint8 rejected;
+		uint8 rejecting;
 		for(i = 0; i < shareHolders.length; i++){
 			if(msg.sender == shareHolders[i]) break;
 		}
 
-		if(debts[_receiver].approvals[i] == PaymentChoice.Reject) return; // save gas
-		debts[_receiver].approvals[i] = PaymentChoice.Reject;
+		if(payments[_receiver].approvals[i] == PaymentChoice.Reject) return; // save gas
+		payments[_receiver].approvals[i] = PaymentChoice.Reject;
 	
-		for(i = 0; i < debts[_receiver].approvals.length; i++){
-			if(debts[_receiver].approvals[i] == PaymentChoice.Reject) rejected++;
+		for(i = 0; i < payments[_receiver].approvals.length; i++){
+			if(payments[_receiver].approvals[i] == PaymentChoice.Reject) rejecting++;
 		}
 
-		if((100 * rejected / shareHolders.length) > 50) { // payment rejected
-			delete debts[_receiver];
+		if((100 * rejecting / shareHolders.length) > 50) { // payment rejected
+			delete payments[_receiver];
 		}
 	}
 
-	// the manager tries to execute a payment under amountHardLimit, only after maxDate
+	// the manager tries to execute a payment under amountHardLimit, only after unlockDate
 	function executePayment(address _receiver) onlyManager {
-		if(debts[_receiver].debt == 0) return;
-		else if(debts[_receiver].maxDate < now) throw;
-		else if(debts[_receiver].debt > amountHardLimit) throw;
+		if(payments[_receiver].debt == 0) return;
+		else if(payments[_receiver].unlockDate > now) throw;
+		else if(payments[_receiver].debt > amountHardLimit) throw;
 
 		uint8 i;
-		uint8 rejected;
+		uint8 approving;
+		uint8 rejecting;
 
-		for(i = 0; i < debts[_receiver].approvals.length; i++){
-			if(debts[_receiver].approvals[i] == PaymentChoice.Reject) rejected++;
+		for(i = 0; i < payments[_receiver].approvals.length; i++){
+			if(payments[_receiver].approvals[i] == PaymentChoice.Approve) approving++;
+			else if(payments[_receiver].approvals[i] == PaymentChoice.Reject) rejecting++;
 		}
 
-		if((100 * rejected / shareHolders.length) < 50) { // rejected votes are minoritary
-			_receiver.transfer(debts[_receiver].debt);
-			debts[_receiver].debt = 0;
-			debts[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+		if((100 * rejecting / shareHolders.length) > 50) return; // an absolute majority rejects the payment
+		else if(approving <= rejecting) return; // no simple majority approves the payment
+		else { // approving has simple majority
+			_receiver.transfer(payments[_receiver].debt);
+			payments[_receiver].debt = 0;
+			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 		}
 	}
 }
