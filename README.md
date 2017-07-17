@@ -76,3 +76,6 @@ And then interact with the contracts as you need.
 ```bash
 $ truffle test
 ```
+
+
+![Mocha + Chai](./test/test.png "Test example")
