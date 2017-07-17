@@ -22,6 +22,10 @@ contract JointSignature is owned, killable {
 	address manager;
 	address[3] shareHolders;
 
+	event Approve(address recipient, uint amount);
+	event Reject(address recipient, uint amount);
+	event Execute(address recipient, uint amount);
+
 	uint256 constant amountSoftLimit = 0.5 ether; // allow the manager to spend 0.5 eth directly once a day
 	uint256 constant amountHardLimit = 5 ether;	 // allow the manager to make payments below 5 eth if no majority rejects it within a day
 	uint directPaymentsTimeThreshold = 1 days; // minimum time frame between payments below amountSoftLimit
@@ -120,6 +124,7 @@ contract JointSignature is owned, killable {
 		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
 		if(!_receiver.send(payments[_receiver].debt)) throw;
+		Approve(_receiver, payments[_receiver].debt);
 		payments[_receiver].debt = 0;
 		payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 	}
@@ -142,6 +147,7 @@ contract JointSignature is owned, killable {
 		}
 
 		if((100 * rejecting / shareHolders.length) > 50) { // payment rejected
+			Reject(_receiver, payments[_receiver].debt);
 			delete payments[_receiver];
 		}
 	}
@@ -165,6 +171,7 @@ contract JointSignature is owned, killable {
 		else if(approving <= rejecting) return; // no simple majority approves the payment
 		else { // approving has simple majority
 			if(!_receiver.send(payments[_receiver].debt)) throw;
+			Execute(_receiver, payments[_receiver].debt);
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 		}

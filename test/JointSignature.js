@@ -115,7 +115,6 @@ contract('JointSignature', function(accounts) {
   });
 
   it("should not let anyone else to register a payment", function() {
-    // const initialBalance = web3.eth.getBalance(instance.address).toNumber();
     const attemptExtraValue = 1000000000000;
 
     return instance.createPayment(web3.toWei(0.1, 'ether'), receivers[1], {from: shareholders[0]})
@@ -132,12 +131,11 @@ contract('JointSignature', function(accounts) {
       })
       .catch(function(error) {
         assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
-        // assert(web3.eth.getBalance(instance.address).toNumber() == initialBalance, "Should have the exact same balance as before");
       })
     });
   });
 
-  it("should allow shareholders to accept a payment", function() {
+  it("should allow shareholders to appove a payment", function() {
     const amount = web3.toWei(0.7, 'ether');
     var receiverInitialBalance = web3.eth.getBalance(receivers[2])
 
@@ -174,27 +172,113 @@ contract('JointSignature', function(accounts) {
   });
 
   it("should allow shareholders to reject a payment", function() {
+    const amount = web3.toWei(0.7, 'ether');
+    var receiverInitialBalance = web3.eth.getBalance(receivers[2]);
+
+    return instance.getDebt.call(receivers[2], {from: shareholders[0]})
+    .then(debt => {
+      assert(debt.equals(0), "should have no debt");
+      
+      return instance.createPayment(amount, receivers[2], {from: manager})
+    })
+    .then(result => {
+      assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
+
+      // shareholder 0 says OK
+      return instance.approvePayment(receivers[2], {from: shareholders[0]})
+      .then(result => {
+        assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
+        
+        return instance.getDebt.call(receivers[2], {from: shareholders[0]})
+      })
+      .then(debt => {
+        assert(debt.equals(amount), "did not properly set the payment amount");
+
+        // shareholder 1 says KO
+        return instance.rejectPayment(receivers[2], {from: shareholders[1]})
+      })
+      .then(result => {
+        assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
+
+        return instance.getDebt.call(receivers[2], {from: shareholders[0]})
+      })
+      .then(debt => {
+        assert(debt.equals(amount), "did not properly set the payment amount");
+
+        // shareholder 2 says KO
+        return instance.rejectPayment(receivers[2], {from: shareholders[2]})
+      })
+      .then(result => {
+        // already majority => check nothing paid
+        assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
+
+        return instance.getDebt.call(receivers[2], {from: shareholders[0]})
+      })
+      .then(debt => {
+        assert(debt.equals(0), "should have no debt");
+      })
+    })
+    .catch(error => {
+      assert(false, "failed registering a payment: " + error.message);
+    });
   });
 
-  it("should not allow non-shareholders to accept a payment", function() {
+  it("should not allow non-shareholders to appove a payment", function() {
+    return instance.createPayment(web3.toWei(0.7, 'ether'), receivers[2], {from: manager})
+    .then(() => {
+      return instance.approvePayment(receivers[2], {from: manager})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return instance.approvePayment(receivers[2], {from: receivers[0]})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
   });
 
   it("should not allow non-shareholders to reject a payment", function() {
+    return instance.createPayment(web3.toWei(0.7, 'ether'), receivers[2], {from: manager})
+    .then(() => {
+      return instance.rejectPayment(receivers[2], {from: manager})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return instance.rejectPayment(receivers[2], {from: receivers[0]})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
   });
 
-  it("should not fulfill a payment when less than 50% of shareholders have accepted it", function() {
-  });
+  // it("should fulfill a payment whenever more than 50% of shareholders accept it", function() {
+  //   // Redundant => already tested above
+  // });
 
-  it("should fulfill a payment whenever more than 50% of shareholders accept it", function() {
-  });
+  // it("should not fulfill a payment when less than 50% of shareholders have accepted it", function() {
+  //   // Redundant => already tested above
+  // });
 
   it("should not allow the manager to execute a payment if more than 50% rejected it in less than a week", function() {
   });
 
   it("should allow the manager to execute a payment if more than 50% did not respond within a week", function() {
-  });
-
-  it("should only allow the manager to kill the contract", function() {
   });
 
   it("should have the right manager and only allow the manager to thange this role", function() {
@@ -220,6 +304,49 @@ contract('JointSignature', function(accounts) {
       assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
     })
     .then(() => instance.setManager(accounts[0], {from: accounts[1]}));
+  });
+
+  it("should only allow the manager to kill the contract", function() {
+    return instance.kill({from: shareholders[0]})
+    .then(() => {
+      assert(false, "should have failed, but didn't");
+    })
+    .catch(function(error) {
+      assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+    })
+    .then(() => {
+      return instance.kill({from: shareholders[1]})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return instance.kill({from: shareholders[2]})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return instance.kill({from: receivers[1]})
+      .then(() => {
+        assert(false, "should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return instance.kill({from: manager})
+      .catch(function(error) {
+        assert(false, "kill should not have failed now");
+      })
+    })
   });
 
 });
