@@ -169,4 +169,7 @@ contract JointSignature is owned, killable {
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 		}
 	}
+
+	// fallback
+	function () payable {}
 }
