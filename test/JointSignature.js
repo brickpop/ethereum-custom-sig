@@ -275,10 +275,161 @@ contract('JointSignature', function(accounts) {
   //   // Redundant => already tested above
   // });
 
-  it("should not allow the manager to execute a payment if more than 50% rejected it in less than a week", function() {
+  it("should not allow the manager to execute a payment if votes for/against are equal", function() {
+    var receiverInitialBalance = web3.eth.getBalance(receivers[3]);
+    const amount = web3.toWei(0.8, 'ether');
+    
+    return instance.getDebt.call(receivers[3], {from: shareholders[0]})
+    .then(debt => {
+      assert(debt.equals(0), "initial debt should be zero");
+      
+      return instance.createPayment(amount, receivers[3], {from: manager})
+    })
+    .then(() => {
+      return instance.executePayment(receivers[3], {from: manager})
+      .then(() => {
+        assert(false, "executePayment should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[3]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+      
+      // wait 5.5s
+      return new Promise(resolve => setTimeout(resolve, 5500));
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[3]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+
+      return instance.executePayment(receivers[3], {from: manager});
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[3]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+    })
+    .catch(function(err) {
+      assert(false, "failed executing the payment: " + err.message);
+    })
   });
 
-  it("should allow the manager to execute a payment if more than 50% did not respond within a week", function() {
+  it("should allow the manager to execute a payment after a week if simple majority approved it", function() {
+    var receiverInitialBalance = web3.eth.getBalance(receivers[4]);
+    const amount = web3.toWei(0.8, 'ether');
+    
+    return instance.getDebt.call(receivers[4], {from: shareholders[0]})
+    .then(debt => {
+      assert(debt.equals(0), "initial debt should be zero");
+      
+      return instance.createPayment(amount, receivers[4], {from: manager})
+    })
+    .then(() => {
+      return instance.approvePayment(receivers[4], {from: shareholders[0]})
+    })
+    .then(() => {
+      return instance.executePayment(receivers[4], {from: manager})
+      .then(() => {
+        assert(false, "executePayment should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+      
+      // wait 5.5s
+      return new Promise(resolve => setTimeout(resolve, 5500));
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+
+      return instance.executePayment(receivers[4], {from: manager});
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance.plus(amount)), "Receiver should have received the money");
+
+      return instance.getDebt.call(receivers[4], {from: shareholders[0]})
+    })
+    .then(debt => {
+      assert(debt.equals(0), "did not clean the debt");
+    })
+    .catch(function(err) {
+      assert(false, "failed executing the payment: " + err.message);
+    })
+  });
+
+  it("should not allow the manager to execute a payment after a week if simple minority rejected it", function() {
+    var receiverInitialBalance = web3.eth.getBalance(receivers[4]);
+    const amount = web3.toWei(0.8, 'ether');
+    
+    return instance.getDebt.call(receivers[4], {from: shareholders[0]})
+    .then(debt => {
+      assert(debt.equals(0), "initial debt should be zero");
+      
+      return instance.createPayment(amount, receivers[4], {from: manager})
+    })
+    .then(() => {
+      return instance.rejectPayment(receivers[4], {from: shareholders[0]})
+    })
+    .then(() => {
+      return instance.executePayment(receivers[4], {from: manager})
+      .then(() => {
+        assert(false, "executePayment should have failed, but didn't");
+      })
+      .catch(function(error) {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+      
+      // wait 5.5s
+      return new Promise(resolve => setTimeout(resolve, 5500));
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should still have the same balance");
+
+      return instance.executePayment(receivers[4], {from: manager});
+    })
+    .then(() => {
+      return web3.eth.getBalance(receivers[4]) 
+    })
+    .then(balance => {
+      assert(balance.equals(receiverInitialBalance), "Receiver should have received the money");
+
+      return instance.getDebt.call(receivers[4], {from: shareholders[0]})
+    })
+    .then(debt => {
+      assert(debt.equals(amount), "should not clean the debt");
+    })
+    .catch(function(err) {
+      assert(false, "failed executing the payment: " + err.message);
+    })
   });
 
   it("should have the right manager and only allow the manager to thange this role", function() {

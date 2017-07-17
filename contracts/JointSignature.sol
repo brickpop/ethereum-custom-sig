@@ -60,8 +60,8 @@ contract JointSignature is owned, killable {
 	// constructor
 	function JointSignature(bool _debug, address _manager, address _shareHolder1, address _shareHolder2, address _shareHolder3) {
 		if(_debug) {
-			directPaymentsTimeThreshold = 15 seconds;
-			paymentsUnlockThreshold = 15 seconds;
+			directPaymentsTimeThreshold = 5 seconds;
+			paymentsUnlockThreshold = 5 seconds;
 		}
 		manager = _manager;
 		shareHolders = [_shareHolder1, _shareHolder2, _shareHolder3];
