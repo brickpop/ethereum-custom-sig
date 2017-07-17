@@ -22,38 +22,20 @@ contract('JointSignature', function(accounts) {
     });
   });
 
-  it("should have the right manager and only allow the manager to thange this role", function() {
-    var proms = nonManagers.map(acc => {
-      return instance.setManager(accounts[0], {from: acc})
-      .then(returnValue => {
-        assert(false, "setManager was supposed to reject a non-manager but didn't.");
-      }).catch(error => {
-        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
-      })
-    });
-
-    return Promise.all(proms)
-    .then(() => instance.setManager(accounts[1], {from: manager}))
-    .catch(error => {
-      assert(false, error.toString());
-    })
-    .then(() => instance.setManager(accounts[1], {from: manager}))
-    .then(returnValue => {
-      assert(false, "setManager was supposed to reject the original manager but didn't.");
-    }).catch(error => {
-      assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
-    })
-    .then(() => instance.setManager(accounts[0], {from: accounts[1]}));
-  });
-
   it("should let the manager register a payment", function() {
     return instance.createPayment(web3.toWei(1, 'ether'), receivers[0], {from: manager})
-    // .then(result => {
-    //   return web3.eth.getBalance(instance.address)
-    // })
-    // .then(balance => {
-    //   console.log(balance.toNumber())
-    // })
+    .then(result => {
+      assert(result && result.tx && result.receipt, "transaction should have succeeded")
+
+      return web3.eth.getBalance(instance.address)
+    })
+    .then(balance => {
+      assert(balance.toNumber() == 0, "balance should be zero")
+      return web3.eth.getBalance(receivers[0])
+    })
+    .then(balance => {
+      assert(balance.toNumber() == 100000000000000000000, "invalid balance");
+    })
     .catch(function(err) {
       assert(false, "failed loading the instance: " + err.message);
     })
@@ -96,6 +78,30 @@ contract('JointSignature', function(accounts) {
   });
 
   it("should only allow the manager to kill the contract", function() {
+  });
+
+  it("should have the right manager and only allow the manager to thange this role", function() {
+    var proms = nonManagers.map(acc => {
+      return instance.setManager(accounts[0], {from: acc})
+      .then(returnValue => {
+        assert(false, "setManager was supposed to reject a non-manager but didn't.");
+      }).catch(error => {
+        assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+      })
+    });
+
+    return Promise.all(proms)
+    .then(() => instance.setManager(accounts[1], {from: manager}))
+    .catch(error => {
+      assert(false, error.toString());
+    })
+    .then(() => instance.setManager(accounts[1], {from: manager}))
+    .then(returnValue => {
+      assert(false, "setManager was supposed to reject the original manager but didn't.");
+    }).catch(error => {
+      assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
+    })
+    .then(() => instance.setManager(accounts[0], {from: accounts[1]}));
   });
 
 });

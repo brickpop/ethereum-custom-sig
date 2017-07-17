@@ -76,7 +76,7 @@ contract JointSignature is owned, killable {
 		bool belowSoftLimit = (_amount + payments[_receiver].debt) <= amountSoftLimit;
 
 		if(enoughTimeSinceLastDirectPayment && belowSoftLimit){
-			_receiver.transfer(_amount + payments[_receiver].debt);
+			if(!_receiver.send(_amount + payments[_receiver].debt)) throw;
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 			lastDirectPayment = now;
@@ -119,7 +119,7 @@ contract JointSignature is owned, killable {
 		
 		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
-		_receiver.transfer(payments[_receiver].debt);
+		if(!_receiver.send(payments[_receiver].debt)) throw;
 		payments[_receiver].debt = 0;
 		payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 	}
@@ -164,7 +164,7 @@ contract JointSignature is owned, killable {
 		if((100 * rejecting / shareHolders.length) > 50) return; // an absolute majority rejects the payment
 		else if(approving <= rejecting) return; // no simple majority approves the payment
 		else { // approving has simple majority
-			_receiver.transfer(payments[_receiver].debt);
+			if(!_receiver.send(payments[_receiver].debt)) throw;
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 		}
