@@ -43,6 +43,7 @@ contract('JointSignature', function(accounts) {
       return instance.createPayment(web3.toWei(1, 'ether'), receivers[0], {from: manager});
     })
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(result && result.tx && result.receipt, "transaction should have succeeded")
 
       return instance.getDebt.call(receivers[0], {from: shareholders[0]});
@@ -58,6 +59,7 @@ contract('JointSignature', function(accounts) {
   it("should increase the amount for an already existing payment, and reset the existing approvals", function() {
     return instance.createPayment(web3.toWei(1, 'ether'), receivers[0], {from: manager})
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(result && result.tx && result.receipt, "transaction should have succeeded")
 
       return instance.getDebt.call(receivers[0], {from: shareholders[0]});
@@ -80,6 +82,7 @@ contract('JointSignature', function(accounts) {
       return instance.createPayment(web3.toWei(0.1, 'ether'), receivers[1], {from: manager})
     })
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(result && result.tx && result.receipt, "transaction should have succeeded")
 
       return web3.eth.getBalance(receivers[1]) 
@@ -102,6 +105,7 @@ contract('JointSignature', function(accounts) {
       return instance.createPayment(web3.toWei(0.1, 'ether'), receivers[1], {from: manager})
     })
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(result && result.tx && result.receipt, "transaction should have succeeded")
 
       return web3.eth.getBalance(receivers[1]) 
@@ -126,7 +130,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.createPayment(web3.toWei(0.1, 'ether'), receivers[1], {from: receivers[0]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -141,11 +146,13 @@ contract('JointSignature', function(accounts) {
 
     return instance.createPayment(amount, receivers[2], {from: manager})
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
 
       // shareholder 0 says OK
       return instance.approvePayment(receivers[2], {from: shareholders[0]})
       .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
         
         return instance.getDebt.call(receivers[2], {from: shareholders[0]})
@@ -157,6 +164,7 @@ contract('JointSignature', function(accounts) {
         return instance.approvePayment(receivers[2], {from: shareholders[1]})
       })
       .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         // already majority => check paid
         assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance.plus(amount)), "Should have paid to the receiver");
 
@@ -182,11 +190,13 @@ contract('JointSignature', function(accounts) {
       return instance.createPayment(amount, receivers[2], {from: manager})
     })
     .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
 
       // shareholder 0 says OK
       return instance.approvePayment(receivers[2], {from: shareholders[0]})
       .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
         
         return instance.getDebt.call(receivers[2], {from: shareholders[0]})
@@ -198,6 +208,7 @@ contract('JointSignature', function(accounts) {
         return instance.rejectPayment(receivers[2], {from: shareholders[1]})
       })
       .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
 
         return instance.getDebt.call(receivers[2], {from: shareholders[0]})
@@ -209,6 +220,7 @@ contract('JointSignature', function(accounts) {
         return instance.rejectPayment(receivers[2], {from: shareholders[2]})
       })
       .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         // already majority => check nothing paid
         assert(web3.eth.getBalance(receivers[2]).equals(receiverInitialBalance), "Should have the exact same balance as before");
 
@@ -225,9 +237,11 @@ contract('JointSignature', function(accounts) {
 
   it("should not allow non-shareholders to appove a payment", function() {
     return instance.createPayment(web3.toWei(0.7, 'ether'), receivers[2], {from: manager})
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.approvePayment(receivers[2], {from: manager})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -236,7 +250,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.approvePayment(receivers[2], {from: receivers[0]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -247,9 +262,11 @@ contract('JointSignature', function(accounts) {
 
   it("should not allow non-shareholders to reject a payment", function() {
     return instance.createPayment(web3.toWei(0.7, 'ether'), receivers[2], {from: manager})
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.rejectPayment(receivers[2], {from: manager})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -258,7 +275,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.rejectPayment(receivers[2], {from: receivers[0]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -285,9 +303,11 @@ contract('JointSignature', function(accounts) {
       
       return instance.createPayment(amount, receivers[3], {from: manager})
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.executePayment(receivers[3], {from: manager})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "executePayment should have failed, but didn't");
       })
       .catch(function(error) {
@@ -311,7 +331,8 @@ contract('JointSignature', function(accounts) {
 
       return instance.executePayment(receivers[3], {from: manager});
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return web3.eth.getBalance(receivers[3]) 
     })
     .then(balance => {
@@ -332,12 +353,15 @@ contract('JointSignature', function(accounts) {
       
       return instance.createPayment(amount, receivers[4], {from: manager})
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.approvePayment(receivers[4], {from: shareholders[0]})
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.executePayment(receivers[4], {from: manager})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "executePayment should have failed, but didn't");
       })
       .catch(function(error) {
@@ -361,7 +385,8 @@ contract('JointSignature', function(accounts) {
 
       return instance.executePayment(receivers[4], {from: manager});
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return web3.eth.getBalance(receivers[4]) 
     })
     .then(balance => {
@@ -387,12 +412,15 @@ contract('JointSignature', function(accounts) {
       
       return instance.createPayment(amount, receivers[4], {from: manager})
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.rejectPayment(receivers[4], {from: shareholders[0]})
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return instance.executePayment(receivers[4], {from: manager})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "executePayment should have failed, but didn't");
       })
       .catch(function(error) {
@@ -416,7 +444,8 @@ contract('JointSignature', function(accounts) {
 
       return instance.executePayment(receivers[4], {from: manager});
     })
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       return web3.eth.getBalance(receivers[4]) 
     })
     .then(balance => {
@@ -435,7 +464,8 @@ contract('JointSignature', function(accounts) {
   it("should have the right manager and only allow the manager to thange this role", function() {
     var proms = nonManagers.map(acc => {
       return instance.setManager(accounts[0], {from: acc})
-      .then(returnValue => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "setManager was supposed to reject a non-manager but didn't.");
       })
       .catch(error => {
@@ -445,11 +475,15 @@ contract('JointSignature', function(accounts) {
 
     return Promise.all(proms)
     .then(() => instance.setManager(accounts[1], {from: manager}))
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
+    })
     .catch(error => {
       assert(false, error.toString());
     })
     .then(() => instance.setManager(accounts[1], {from: manager}))
-    .then(returnValue => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(false, "setManager was supposed to reject the original manager but didn't.");
     }).catch(error => {
       assert(error.toString().indexOf("invalid opcode") > 0, error.toString());
@@ -459,7 +493,8 @@ contract('JointSignature', function(accounts) {
 
   it("should only allow the manager to kill the contract", function() {
     return instance.kill({from: shareholders[0]})
-    .then(() => {
+    .then(result => {
+      assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
       assert(false, "should have failed, but didn't");
     })
     .catch(function(error) {
@@ -467,7 +502,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.kill({from: shareholders[1]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -476,7 +512,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.kill({from: shareholders[2]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -485,7 +522,8 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.kill({from: receivers[1]})
-      .then(() => {
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
         assert(false, "should have failed, but didn't");
       })
       .catch(function(error) {
@@ -494,6 +532,9 @@ contract('JointSignature', function(accounts) {
     })
     .then(() => {
       return instance.kill({from: manager})
+      .then(result => {
+        assert(result.receipt.gasUsed < 300000, "Uses so much gas:", result.receipt.gasUsed, result.tx);
+      })
       .catch(function(error) {
         assert(false, "kill should not have failed now");
       })

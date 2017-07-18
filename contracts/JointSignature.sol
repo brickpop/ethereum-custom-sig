@@ -10,15 +10,12 @@ contract owned {
 		if (msg.sender == owner) _ ;
 		else throw;
 	}
-}
-
-contract killable is owned {
 	function kill() ownerOnly {
 		suicide(owner);
 	}
 }
 
-contract JointSignature is owned, killable {
+contract JointSignature is owned {
 	address manager;
 	address[3] shareHolders;
 
@@ -33,17 +30,14 @@ contract JointSignature is owned, killable {
 	uint lastDirectPayment = 0; // timestamp
 
 	modifier onlyManager {
-		if(msg.sender == manager) _ ;
-		else throw;
+		require(msg.sender == manager);
+		_ ;
 	}
 	modifier onlyShareHolders {
-		for(uint8 i = 0; i < shareHolders.length; i++){
-			if(shareHolders[i] == msg.sender) {
-				_ ;
-				return;
-			}
+		if(shareHolders[0] == msg.sender || shareHolders[1] == msg.sender || shareHolders[2] == msg.sender) {
+			_ ;
 		}
-		throw;
+		else throw;
 	}
 
 	enum PaymentChoice { Pending, Approve, Reject }
@@ -73,13 +67,10 @@ contract JointSignature is owned, killable {
 	}
 
 	// manager registers a payment
-	function createPayment(uint256 _amount, address _receiver) onlyManager {
-		if(_amount == 0) return; // save gas
+	function createPayment(uint256 _amount, address _receiver) onlyManager returns (bool) {
+		if(_amount == 0) return false; // save gas
 
-		bool enoughTimeSinceLastDirectPayment = (lastDirectPayment + directPaymentsTimeThreshold) < now;
-		bool belowSoftLimit = (_amount + payments[_receiver].debt) <= amountSoftLimit;
-
-		if(enoughTimeSinceLastDirectPayment && belowSoftLimit){
+		if(canPaymentBeDirect(_amount, _receiver)){
 			if(!_receiver.send(_amount + payments[_receiver].debt)) throw;
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
@@ -97,6 +88,15 @@ contract JointSignature is owned, killable {
 				approvals: [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending]
 			});
 		}
+		return true;
+	}
+
+	function canPaymentBeDirect(uint256 _amount, address _receiver) private constant returns (bool){
+		bool enoughTimeSinceLastDirectPayment = (lastDirectPayment + directPaymentsTimeThreshold) < now;
+		if(!enoughTimeSinceLastDirectPayment) return false;
+
+		bool belowSoftLimit = (_amount + payments[_receiver].debt) <= amountSoftLimit;
+		return belowSoftLimit;
 	}
 
 	// how much is it owed to a receiver
