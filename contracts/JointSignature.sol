@@ -8,7 +8,6 @@ contract owned {
 
 	modifier ownerOnly {
 		if (msg.sender == owner) _ ;
-		else throw;
 	}
 	function kill() ownerOnly {
 		suicide(owner);
@@ -34,10 +33,8 @@ contract JointSignature is owned {
 		_ ;
 	}
 	modifier onlyShareHolders {
-		if(shareHolders[0] == msg.sender || shareHolders[1] == msg.sender || shareHolders[2] == msg.sender) {
-			_ ;
-		}
-		else throw;
+		require(shareHolders[0] == msg.sender || shareHolders[1] == msg.sender || shareHolders[2] == msg.sender);
+		_ ;
 	}
 
 	enum PaymentChoice { Pending, Approve, Reject }
@@ -71,7 +68,7 @@ contract JointSignature is owned {
 		if(_amount == 0) return false; // save gas
 
 		if(canPaymentBeDirect(_amount, _receiver)){
-			if(!_receiver.send(_amount + payments[_receiver].debt)) throw;
+			if(!_receiver.send(_amount + payments[_receiver].debt)) return false;
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
 			lastDirectPayment = now;
@@ -123,7 +120,7 @@ contract JointSignature is owned {
 		
 		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
-		if(!_receiver.send(payments[_receiver].debt)) throw;
+		if(!_receiver.send(payments[_receiver].debt)) return;
 		Approve(_receiver, payments[_receiver].debt);
 		payments[_receiver].debt = 0;
 		payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
@@ -153,10 +150,10 @@ contract JointSignature is owned {
 	}
 
 	// the manager tries to execute a payment under amountHardLimit, only after unlockDate
-	function executePayment(address _receiver) onlyManager {
-		if(payments[_receiver].debt == 0) return;
-		else if(payments[_receiver].unlockDate > now) throw;
-		else if(payments[_receiver].debt > amountHardLimit) throw;
+	function executePayment(address _receiver) onlyManager returns (bool) {
+		if(payments[_receiver].debt == 0) return false;
+		else if(payments[_receiver].unlockDate > now) return false;
+		else if(payments[_receiver].debt > amountHardLimit) return false;
 
 		uint8 i;
 		uint8 approving;
@@ -170,7 +167,7 @@ contract JointSignature is owned {
 		if((100 * rejecting / shareHolders.length) > 50) return; // an absolute majority rejects the payment
 		else if(approving <= rejecting) return; // no simple majority approves the payment
 		else { // approving has simple majority
-			if(!_receiver.send(payments[_receiver].debt)) throw;
+			if(!_receiver.send(payments[_receiver].debt)) return false;
 			Execute(_receiver, payments[_receiver].debt);
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
