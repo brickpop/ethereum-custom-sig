@@ -21,6 +21,8 @@ contract JointSignature is owned {
 	event Approve(address recipient, uint amount);
 	event Reject(address recipient, uint amount);
 	event Execute(address recipient, uint amount);
+	event Withdraw(address recipient, uint amount);
+	// event Log(string text);
 
 	uint256 constant amountSoftLimit = 0.5 ether; // allow the manager to spend 0.5 eth directly once a day
 	uint256 constant amountHardLimit = 5 ether;	 // allow the manager to make payments below 5 eth if no majority rejects it within a day
@@ -29,24 +31,26 @@ contract JointSignature is owned {
 	uint lastDirectPayment = 0; // timestamp
 
 	modifier onlyManager {
-		require(msg.sender == manager);
+		require(msg.sender == manager); // will throw if false
 		_ ;
 	}
 	modifier onlyShareHolders {
-		require(shareHolders[0] == msg.sender || shareHolders[1] == msg.sender || shareHolders[2] == msg.sender);
+		require(shareHolders[0] == msg.sender || shareHolders[1] == msg.sender || shareHolders[2] == msg.sender); // will throw if false
 		_ ;
 	}
 
-	enum PaymentChoice { Pending, Approve, Reject }
+	enum PaymentVote { Pending, Approve, Reject }
 
 	struct Payment {
 		uint debt;
 		uint unlockDate; // payments (below amountHardLimit) are unlocked after this timestamp provided that > 50% is not against
-		PaymentChoice[3] approvals;
+		PaymentVote[3] approvals;
 	}
 
 	// @receiver => payment
-	mapping (address => Payment) private payments;
+	mapping (address => Payment) private payments; // still to be approved
+
+	mapping (address => uint) private approvedPayments; // available
 
 	// constructor
 	function JointSignature(bool _debug, address _manager, address _shareHolder1, address _shareHolder2, address _shareHolder3) {
@@ -68,21 +72,23 @@ contract JointSignature is owned {
 		if(_amount == 0) return false; // save gas
 
 		if(canPaymentBeDirect(_amount, _receiver)){
-			if(!_receiver.send(_amount + payments[_receiver].debt)) return false;
-			payments[_receiver].debt = 0;
-			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+			// if(!_receiver.send(_amount + payments[_receiver].debt)) return false;
 			lastDirectPayment = now;
+			uint totalAmount = (_amount + payments[_receiver].debt);
+			payments[_receiver].debt = 0;
+			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
+			approvedPayments[_receiver] += totalAmount;
 		}
 		else if(payments[_receiver].debt > 0) { // increase + discard previous approvals
 			payments[_receiver].debt += _amount;
-			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
 		}
 		else {
 			uint unlockDate = now + paymentsUnlockThreshold;
 			payments[_receiver] = Payment({
 				debt: _amount,
 				unlockDate: unlockDate,
-				approvals: [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending]
+				approvals: [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending]
 			});
 		}
 		return true;
@@ -111,19 +117,21 @@ contract JointSignature is owned {
 			if(msg.sender == shareHolders[i]) break;
 		}
 
-		if(payments[_receiver].approvals[i] == PaymentChoice.Approve) return; // save gas
-		payments[_receiver].approvals[i] = PaymentChoice.Approve;
+		if(payments[_receiver].approvals[i] == PaymentVote.Approve) return; // save gas
+		payments[_receiver].approvals[i] = PaymentVote.Approve;
 
 		for(i = 0; i < payments[_receiver].approvals.length; i++){
-			if(payments[_receiver].approvals[i] == PaymentChoice.Approve) approving++;
+			if(payments[_receiver].approvals[i] == PaymentVote.Approve) approving++;
 		}
 		
 		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
-		if(!_receiver.send(payments[_receiver].debt)) return;
+		// if(!_receiver.send(payments[_receiver].debt)) return;
 		Approve(_receiver, payments[_receiver].debt);
+		uint amount = payments[_receiver].debt;
 		payments[_receiver].debt = 0;
-		payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+		payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
+		approvedPayments[_receiver] += amount;
 	}
 
 	// a shareholder rejects a payment
@@ -136,11 +144,11 @@ contract JointSignature is owned {
 			if(msg.sender == shareHolders[i]) break;
 		}
 
-		if(payments[_receiver].approvals[i] == PaymentChoice.Reject) return; // save gas
-		payments[_receiver].approvals[i] = PaymentChoice.Reject;
+		if(payments[_receiver].approvals[i] == PaymentVote.Reject) return; // save gas
+		payments[_receiver].approvals[i] = PaymentVote.Reject;
 	
 		for(i = 0; i < payments[_receiver].approvals.length; i++){
-			if(payments[_receiver].approvals[i] == PaymentChoice.Reject) rejecting++;
+			if(payments[_receiver].approvals[i] == PaymentVote.Reject) rejecting++;
 		}
 
 		if((100 * rejecting / shareHolders.length) > 50) { // payment rejected
@@ -160,18 +168,29 @@ contract JointSignature is owned {
 		uint8 rejecting;
 
 		for(i = 0; i < payments[_receiver].approvals.length; i++){
-			if(payments[_receiver].approvals[i] == PaymentChoice.Approve) approving++;
-			else if(payments[_receiver].approvals[i] == PaymentChoice.Reject) rejecting++;
+			if(payments[_receiver].approvals[i] == PaymentVote.Approve) approving++;
+			else if(payments[_receiver].approvals[i] == PaymentVote.Reject) rejecting++;
 		}
 
 		if((100 * rejecting / shareHolders.length) > 50) return; // an absolute majority rejects the payment
 		else if(approving <= rejecting) return; // no simple majority approves the payment
 		else { // approving has simple majority
-			if(!_receiver.send(payments[_receiver].debt)) return false;
+			// if(!_receiver.send(payments[_receiver].debt)) return false;
 			Execute(_receiver, payments[_receiver].debt);
+			uint amount = payments[_receiver].debt;
 			payments[_receiver].debt = 0;
-			payments[_receiver].approvals = [PaymentChoice.Pending, PaymentChoice.Pending, PaymentChoice.Pending];
+			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
+			approvedPayments[_receiver] += amount;
 		}
+	}
+
+	function withdraw() returns (bool){
+		if(approvedPayments[msg.sender] == 0) return false;
+		Withdraw(msg.sender, approvedPayments[msg.sender]);
+
+		uint amount = approvedPayments[msg.sender];
+		approvedPayments[msg.sender] = 0;
+		if(!msg.sender.send(amount)) return false;
 	}
 
 	// fallback
