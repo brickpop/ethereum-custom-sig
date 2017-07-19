@@ -70,23 +70,26 @@ contract JointSignature is owned {
 	// manager registers a payment
 	function createPayment(uint256 _amount, address _receiver) onlyManager returns (bool) {
 		if(_amount == 0) return false; // save gas
+		uint prevAmount = payments[_receiver].debt;
+		uint newAmount = _amount + prevAmount;
+		require(newAmount > prevAmount); // prevent overflow
 
 		if(canPaymentBeDirect(_amount, _receiver)){
-			// if(!_receiver.send(_amount + payments[_receiver].debt)) return false;
 			lastDirectPayment = now;
-			uint totalAmount = (_amount + payments[_receiver].debt);
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
-			approvedPayments[_receiver] += totalAmount;
+			
+			require(approvedPayments[_receiver] + newAmount > approvedPayments[_receiver]);
+			approvedPayments[_receiver] += newAmount;
 		}
-		else if(payments[_receiver].debt > 0) { // increase + discard previous approvals
-			payments[_receiver].debt += _amount;
+		else if(prevAmount > 0) { // increase + discard previous approvals
+			payments[_receiver].debt = newAmount;
 			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
 		}
 		else {
 			uint unlockDate = now + paymentsUnlockThreshold;
 			payments[_receiver] = Payment({
-				debt: _amount,
+				debt: newAmount,
 				unlockDate: unlockDate,
 				approvals: [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending]
 			});
@@ -126,11 +129,12 @@ contract JointSignature is owned {
 		
 		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
 
-		// if(!_receiver.send(payments[_receiver].debt)) return;
 		Approve(_receiver, payments[_receiver].debt);
 		uint amount = payments[_receiver].debt;
 		payments[_receiver].debt = 0;
 		payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
+		
+		require(approvedPayments[_receiver] + amount > approvedPayments[_receiver]);
 		approvedPayments[_receiver] += amount;
 	}
 
@@ -175,11 +179,12 @@ contract JointSignature is owned {
 		if((100 * rejecting / shareHolders.length) > 50) return; // an absolute majority rejects the payment
 		else if(approving <= rejecting) return; // no simple majority approves the payment
 		else { // approving has simple majority
-			// if(!_receiver.send(payments[_receiver].debt)) return false;
 			Execute(_receiver, payments[_receiver].debt);
 			uint amount = payments[_receiver].debt;
 			payments[_receiver].debt = 0;
 			payments[_receiver].approvals = [PaymentVote.Pending, PaymentVote.Pending, PaymentVote.Pending];
+			
+			require(approvedPayments[_receiver] + amount > approvedPayments[_receiver]);
 			approvedPayments[_receiver] += amount;
 		}
 	}
