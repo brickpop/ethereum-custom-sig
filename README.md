@@ -36,8 +36,17 @@ $ npm install -g truffle ethereumjs-testrpc
 
 In one terminal window, launch `testrpc`
 
-* Copy the first addresses
-* Paste them into `migrations/2_deploy_contracts.js` > `manager` and `shareholders [...]`
+* Copy the first 4 public addresses
+* Paste them into `migrations/2_deploy_contracts.js` in order
+
+```
+const manager = "..."; // 1st one here
+const shareholders = [
+  "...", // 2nd one here
+  "...", // 3rd one here
+  "..."  // 4th one here
+];
+```
 
 In the other one, use `truffle` to compile and deploy the app to your local net.
 
