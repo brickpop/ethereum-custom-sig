@@ -23,6 +23,7 @@ The JointSignature contract features the following operations:
 * `function approvePayment(address _receiver) onlyShareHolders`
 * `function rejectPayment(address _receiver) onlyShareHolders`
 * `function executePayment(address _receiver) onlyManager`
+* `function withdraw() returns (bool)`
 * `function kill() ownerOnly`
 
 
