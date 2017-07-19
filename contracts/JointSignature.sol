@@ -127,7 +127,7 @@ contract JointSignature is owned {
 			if(payments[_receiver].approvals[i] == PaymentVote.Approve) approving++;
 		}
 		
-		if((100 * approving / shareHolders.length) < 50) return; // nothing to do at this point
+		if((100 * approving / shareHolders.length) <= 50) return; // nothing to do at this point
 
 		Approve(_receiver, payments[_receiver].debt);
 		uint amount = payments[_receiver].debt;
